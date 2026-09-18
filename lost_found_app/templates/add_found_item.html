@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Found Item - Lost & Found</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-search"></i> Lost & Found Manager</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('manage_items') }}">Manage Items</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-lg">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0"><i class="fas fa-plus"></i> Add Found Item</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="addItemForm">
+                            <div class="mb-4">
+                                <label class="form-label fw-bold"><i class="fas fa-tag"></i> Item Type *</label>
+                                <select class="form-select form-select-lg" id="item_type_id" name="item_type_id" required onchange="updateItemFields()">
+                                    <option value="">-- Select Item Type --</option>
+                                    {% for item_type in item_types %}
+                                    <option value="{{ item_type.id }}">{{ item_type.icon }} {{ item_type.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div id="dynamicFieldsContainer"></div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="fas fa-layer-group"></i> Shelf Number *</label>
+                                <select class="form-select form-select-lg" name="shelf_id">
+                                    <option value="">-- Select Shelf (Optional) --</option>
+                                    {% for shelf in shelves %}
+                                    <option value="{{ shelf.id }}">Shelf {{ shelf.shelf_number }} - {{ shelf.location }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Assign the item to a specific shelf for organized storage</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="fas fa-map-marker-alt"></i> Shelf Location *</label>
+                                <input type="text" class="form-control form-control-lg" name="location" placeholder="e.g., Shelf A3, Lost & Found Box 1" required>
+                                <small class="text-muted">Specify exactly where the item is stored</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="fas fa-calendar"></i> Date Found *</label>
+                                <input type="date" class="form-control form-control-lg" name="date_found" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="fas fa-image"></i> Photo URL</label>
+                                <input type="url" class="form-control form-control-lg" name="photo_url" placeholder="https://example.com/photo.jpg">
+                                <small class="text-muted">Optional: Add a photo URL of the found item for better identification</small>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold"><i class="fas fa-sticky-note"></i> Additional Notes</label>
+                                <textarea class="form-control" name="notes" rows="3" placeholder="Any additional details..."></textarea>
+                            </div>
+
+                            <div id="message" class="alert" style="display:none;"></div>
+
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Add Item</button>
+                                <a href="{{ url_for('manage_items') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Cancel</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const itemTypes = {{ item_types_data | tojson }};
+
+        function updateItemFields() {
+            const typeId = document.getElementById('item_type_id').value;
+            const container = document.getElementById('dynamicFieldsContainer');
+            container.innerHTML = '';
+
+            if (!typeId) return;
+
+            const selectedType = itemTypes.find(t => t.id == typeId);
+            if (selectedType && selectedType.fields) {
+                selectedType.fields.forEach((field, index) => {
+                    const fieldLabel = field.replace(/_/g, ' ').toUpperCase();
+                    let inputType = 'text';
+                    let placeholder = `Enter ${fieldLabel.toLowerCase()}`;
+
+                    if (field.includes('size')) inputType = 'text';
+                    if (field.includes('color')) inputType = 'text';
+                    if (field.includes('id')) inputType = 'text';
+                    if (field.includes('date')) inputType = 'date';
+
+                    const html = `
+                        <div class="mb-3">
+                            <label class="form-label fw-bold"><i class="fas fa-info-circle"></i> ${fieldLabel} *</label>
+                            <input type="${inputType}" class="form-control form-control-lg" 
+                                   name="desc_${field}" 
+                                   placeholder="${placeholder}" 
+                                   required>
+                        </div>
+                    `;
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+            }
+        }
+
+        document.getElementById('addItemForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            
+            fetch('{{ url_for("add_found_item") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                const msgDiv = document.getElementById('message');
+                if (data.success) {
+                    msgDiv.className = 'alert alert-success';
+                    msgDiv.textContent = '✓ ' + data.message;
+                    msgDiv.style.display = 'block';
+                    setTimeout(() => {
+                        window.location.href = '{{ url_for("manage_items") }}';
+                    }, 2000);
+                } else {
+                    msgDiv.className = 'alert alert-danger';
+                    msgDiv.textContent = '✗ Error: ' + data.message;
+                    msgDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('message').className = 'alert alert-danger';
+                document.getElementById('message').textContent = 'An error occurred: ' + error;
+                document.getElementById('message').style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>

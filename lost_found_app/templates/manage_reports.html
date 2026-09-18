@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost Reports - Lost & Found</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}"><i class="fas fa-search"></i> Lost & Found Manager</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('manage_items') }}">Manage Items</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('add_found_item') }}">Add Item</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('display') }}" target="_blank">Display</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('items_public') }}" target="_blank">Public View</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_profile') }}">Profile</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="fas fa-file-alt"></i> Lost Item Reports ({{ reports | length }})</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if reports %}
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Report ID</th>
+                                        <th>Student</th>
+                                        <th>Admission No</th>
+                                        <th>Item Type</th>
+                                        <th>Description</th>
+                                        <th>Date Lost</th>
+                                        <th>Contact</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for report in reports %}
+                                    <tr>
+                                        <td><strong>#{{ report.id }}</strong></td>
+                                        <td>{{ report.student_name }}</td>
+                                        <td>
+                                            <span class="badge bg-info">{{ report.student_admission_no }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary">{{ report.item_type.name }}</span>
+                                        </td>
+                                        <td>
+                                            <small>
+                                                {% for key, value in report.description.items() %}
+                                                    <strong>{{ key }}:</strong> {{ value }}<br>
+                                                {% endfor %}
+                                            </small>
+                                        </td>
+                                        <td>{{ report.date_lost.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ report.contact_info }}</td>
+                                        <td>
+                                            {% if report.status == 'Pending' %}
+                                                <span class="badge bg-warning">Pending</span>
+                                            {% elif report.status == 'Found' %}
+                                                <span class="badge bg-success">Found</span>
+                                            {% else %}
+                                                <span class="badge bg-info">Resolved</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if report.status == 'Pending' %}
+                                            <button class="btn btn-sm btn-success" onclick="matchItem({{ report.id }})">
+                                                <i class="fas fa-link"></i> Match
+                                            </button>
+                                            {% endif %}
+                                            {% if report.matched_found_item_id %}
+                                            <small class="d-block text-muted">Matched with Item #{{ report.matched_found_item_id }}</small>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> No lost reports yet.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Match Item Modal -->
+    <div class="modal fade" id="matchModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Match with Found Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">Available Found Items:</label>
+                    <select class="form-select form-select-lg" id="found_item_id">
+                        <option value="">-- Select Found Item --</option>
+                    </select>
+                    <div id="itemDetails" class="mt-3"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitMatch()">Match Items</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentReportId = null;
+
+        function matchItem(reportId) {
+            currentReportId = reportId;
+            loadAvailableItems();
+            new bootstrap.Modal(document.getElementById('matchModal')).show();
+        }
+
+        function loadAvailableItems() {
+            fetch('{{ url_for("get_found_items") }}')
+                .then(response => response.json())
+                .then(items => {
+                    const select = document.getElementById('found_item_id');
+                    select.innerHTML = '<option value="">-- Select Found Item --</option>';
+                    items.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.id;
+                        option.textContent = `#${item.id} - ${item.item_type} at ${item.location}`;
+                        select.appendChild(option);
+                    });
+                });
+        }
+
+        function submitMatch() {
+            const foundItemId = document.getElementById('found_item_id').value;
+            if (!foundItemId) {
+                alert('Please select a found item');
+                return;
+            }
+
+            fetch(`/admin/report/${currentReportId}/match`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ found_item_id: foundItemId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
